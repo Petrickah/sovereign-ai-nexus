@@ -1,0 +1,12 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/core:/code/core
+    tty: true
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
