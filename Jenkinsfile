@@ -14,10 +14,17 @@
 // its public half registered as a write-access GitHub Deploy Key on that repo
 // only — reuse this pattern for future projects that want the same mirror setup.
 
+// "Build & Push: <service>" (added 2026-08-20): one Jenkinsfile, one stage per
+// service, each with its own Kaniko context/Dockerfile/image tag — not a
+// separate Jenkins job per service. Same practical isolation (backend build
+// failing doesn't touch the frontend build result) without re-paying the
+// per-job setup cost (branch discovery trait, webhook registration) for a
+// single-repo, two-service project. Reuse this shape (one stage per
+// `<service>/Dockerfile`) if a third service is added later.
+
 pipeline {
     agent { kubernetes { inheritFrom 'kaniko' } }
     environment {
-        IMAGE_NAME = 'sovereign-ai-nexus'
         REGISTRY   = '192.168.1.20:5000'
         GITHUB_MIRROR_URL = 'git@github.com:Petrickah/sovereign-ai-nexus.git'
     }
@@ -37,14 +44,27 @@ pipeline {
                 }
             }
         }
-        stage('Build & Push') {
+        stage('Build & Push: backend') {
             steps {
                 container('kaniko') {
                     sh '''
                     /kaniko/executor                                            \
-                      --context="$(pwd)"                                       \
+                      --context="$(pwd)/backend"                               \
                       --dockerfile=Dockerfile                                  \
-                      --destination=${REGISTRY}/${IMAGE_NAME}:${BRANCH_NAME}-${BUILD_NUMBER} \
+                      --destination=${REGISTRY}/sovereign-ai-nexus-backend:${BRANCH_NAME}-${BUILD_NUMBER} \
+                      --insecure --skip-tls-verify
+                    '''
+                }
+            }
+        }
+        stage('Build & Push: frontend') {
+            steps {
+                container('kaniko') {
+                    sh '''
+                    /kaniko/executor                                            \
+                      --context="$(pwd)/frontend"                              \
+                      --dockerfile=Dockerfile                                  \
+                      --destination=${REGISTRY}/sovereign-ai-nexus-frontend:${BRANCH_NAME}-${BUILD_NUMBER} \
                       --insecure --skip-tls-verify
                     '''
                 }
