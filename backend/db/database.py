@@ -1,6 +1,9 @@
 import os
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, make_url
+
+from core.models import ChatResponse
 
 class DatabaseClient:
     def __init__(self) -> None:
@@ -18,6 +21,28 @@ class DatabaseClient:
 
     def get_url(self) -> str:
         return str(self._url)
+
+    def insert_exchange(self, chat_response: ChatResponse) -> None:
+        self._connect.execute(
+            text("INSERT INTO exchanges (prompt, response, created_at) VALUES (:prompt, :response, :created_at)"),
+            {"prompt": chat_response.prompt, "response": chat_response.response, "created_at": chat_response.created_at},
+        )
+        self._connect.commit()
+
+    def get_exchanges(self, msg_count: int) -> list[ChatResponse]:
+        result = self._connect.execute(
+            text("SELECT prompt, response, created_at FROM exchanges ORDER BY created_at DESC LIMIT (:msg_count)"),
+            {"msg_count": msg_count}
+        )
+        responses = []
+        for row in result:
+            responses.append(ChatResponse(
+                prompt=row.prompt, 
+                response=row.response, 
+                created_at=row.created_at
+            ))
+
+        return responses
 
     def get_details(self) -> dict:
         version = self._connect.execute(text("SELECT version()")).scalar()
