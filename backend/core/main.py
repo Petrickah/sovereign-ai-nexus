@@ -1,7 +1,9 @@
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from db.database import DatabaseClient
 from core.models import ChatRequest, ChatResponse
@@ -14,6 +16,14 @@ async def lifespan(app: FastAPI):
     db_client.close()
 
 app = FastAPI(lifespan=lifespan)
+
+frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[frontend_origin],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["*"],
+)
 
 async def call_llm(prompt: str) -> str:
     context = []
@@ -46,13 +56,29 @@ async def read_root():
 @app.post("/chat")
 async def chat(msg: ChatRequest):
     created_at = datetime.now(timezone.utc)
-    response: ChatResponse = ChatResponse(
-        prompt = msg.prompt,
-        response = await call_llm(msg.prompt),
-        created_at = created_at
-    )
+    response_text = await call_llm(msg.prompt)
 
     # This will save into the database the Chat Exchange
-    db_client.insert_exchange(response)
+    new_id = db_client.insert_exchange(msg.prompt, response_text, created_at)
 
-    return response
+    return ChatResponse(
+        id=new_id,
+        prompt=msg.prompt,
+        response=response_text,
+        created_at=created_at
+    )
+
+@app.get("/history")
+async def get_history() -> list[ChatResponse]:
+    return db_client.get_history()
+
+@app.delete("/history/{exchange_id}")
+async def delete_exchange(exchange_id: int):
+    if not db_client.delete_exchange(exchange_id):
+        raise HTTPException(status_code=404, detail="Exchange not found")
+    return {"id": exchange_id}
+
+@app.delete("/history")
+async def delete_history():
+    deleted = db_client.delete_all_exchanges()
+    return {"deleted": deleted}

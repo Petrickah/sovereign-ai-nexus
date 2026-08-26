@@ -1,29 +1,40 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatMessage } from '../types'
+import type { ExchangeItem } from '../types'
 
 interface ChatHistoryProps {
-  messages: ChatMessage[]
-  pending: boolean
+  items: ExchangeItem[]
+  onDelete: (id: number) => void
 }
 
-function ChatHistory({ messages, pending }: ChatHistoryProps) {
+function ChatHistory({ items, onDelete }: ChatHistoryProps) {
   return (
     <div className="chat-history">
-      {messages.map((message, i) => (
-        <div key={i} className={`chat-message chat-message-${message.role}`}>
-          {message.role === 'assistant' ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+      {items.map((item) => (
+        <div key={item.id ?? 'pending'} className="chat-exchange">
+          <div className="chat-message chat-message-user">
+            <p>{item.prompt}</p>
+          </div>
+          {item.response !== null ? (
+            <>
+              <div className="chat-message chat-message-assistant">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.response}</ReactMarkdown>
+              </div>
+              <button
+                className="chat-exchange-delete"
+                onClick={() => onDelete(item.id)}
+                aria-label="Delete this exchange"
+              >
+                Delete
+              </button>
+            </>
           ) : (
-            <p>{message.content}</p>
+            <div className="chat-message chat-message-assistant chat-message-pending">
+              <p>Thinking…</p>
+            </div>
           )}
         </div>
       ))}
-      {pending && (
-        <div className="chat-message chat-message-assistant chat-message-pending">
-          <p>Thinking…</p>
-        </div>
-      )}
     </div>
   )
 }

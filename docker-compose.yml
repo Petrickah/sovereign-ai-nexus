@@ -8,6 +8,7 @@ services:
       - DATABASE_NAME=${DATABASE_NAME}
       - DATABASE_PORT=${DATABASE_PORT}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN}
     ports:
       - "8000:8000"
     volumes:
@@ -20,7 +21,10 @@ services:
     tty: true
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
     restart: always
     ports:
       - "3000:3000"
