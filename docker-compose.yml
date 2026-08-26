@@ -11,6 +11,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/core:/code/core
+      - ./backend/db:/code/db
     depends_on:
       database:
         condition: service_healthy
@@ -30,12 +31,13 @@ services:
       POSTGRES_PASSWORD: example
       POSTGRES_DB: sovereign_db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 1s
       timeout: 5s
       retries: 10
     volumes:
       - pgdata:/var/lib/postgresql
+      - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
   adminer:
     image: adminer:6.0.1-standalone
