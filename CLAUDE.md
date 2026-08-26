@@ -42,6 +42,15 @@ Gitea (source of truth) → Jenkins multibranch (`Jenkinsfile`): checkout → mi
 
 Deployment to a running environment (k3s namespaces for staging/prod) isn't wired up yet — deliberately deferred until there's a database and a real endpoint worth deploying, not just this skeleton.
 
+## Git workflow (standing rule, 2026-08-26)
+
+Claude Code owns git mechanics here — branch hygiene, commits, pushes, fetches, rebases, Gitea↔GitHub sync. The one thing that stays the user's own action: clicking "Merge pull request" on GitHub's web UI (kept deliberately, for portfolio/authorship visibility — don't do this yourself even if you technically could via `gh`).
+
+- `dev` is the working branch. **Always verify the current branch before committing** (`git branch --show-current`) — don't assume the working tree is where you left it.
+- **Never leave the working tree checked out on `main` between turns/sessions.** This exact mistake (checkout left on `main` after a sync) is what caused a real incident on 2026-08-26 — see the "Update branch" gotcha below for the full chain it triggered.
+- Commit incrementally with clear messages as you go, push to `origin` (Gitea) — don't batch everything into one commit at the end, and don't leave work uncommitted for a later session to sort out.
+- When a PR eventually gets merged on GitHub, sync it back: `git fetch github main`, verify fast-forward safety (`git merge-base --is-ancestor origin/main github/main`), `git merge --ff-only github/main`, `git push origin main` — then switch back to `dev` immediately.
+
 ## Non-goals (v1 — see the private vault note for the full list/reasoning)
 
-No auth/OAuth/JWT, no conversation history CRUD, no multi-panel UI, no multi-agent orchestration, no public deploy yet. Don't add these without checking the vault note first — several were deliberately excluded to keep scope small (this project's whole premise is avoiding the scope-creep that killed its two predecessor project ideas).
+No auth/OAuth/JWT, no multi-panel UI, no multi-agent orchestration, no public deploy yet. Conversation history CRUD is **no longer a non-goal** (added 2026-08-26, pulled forward from the deferred list — see KANBAN). Don't add the rest without checking the vault note first — several were deliberately excluded to keep scope small (this project's whole premise is avoiding the scope-creep that killed its two predecessor project ideas).
