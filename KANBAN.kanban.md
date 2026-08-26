@@ -1,21 +1,10 @@
 <!-- This is a Kanban Board file created with MD Kanban extension -->
 <!-- GitHub: https://github.com/jebakumarj/md-kanban -->
 <!-- VS Code Extension: Search "MD Kanban" in the extension store (ID: jeddak.md-kanban) -->
-<!-- Tracks movement only (Backlog/In Progress/Paused/Done), same philosophy as 05_Projects/KANBAN.md in the vault. Full task detail (Goal/Visible output/Done when) lives in CLAUDE.md and the private vault note — don't duplicate it here. -->
 
 # Sovereign AI Nexus — Kanban
 
 ## Backlog
-
-#### Task 2 — Schema PostgreSQL + model SQLAlchemy
-<!-- id: task-1787230831000-0 -->
-Tabela `exchanges` (prompt, response, created_at). Deliberately split from Task 1's original scope — Postgres isn't in docker-compose.yml yet.
-Tags: `backend` `db`
-
-#### Task 3 — Endpoint FastAPI POST /chat
-<!-- id: task-1787230831000-1 -->
-Delegates to `claude -p` (subprocess) or OpenRouter, env-switchable. Decide async subprocess handling + CLI auth-in-container before starting (flagged by council review) — see CLAUDE.md.
-Tags: `backend` `api`
 
 #### Task 4 — UI React/TS, chat input
 <!-- id: task-1787230831000-2 -->
@@ -52,3 +41,13 @@ Tags: `backend` `frontend` `infra`
 <!-- id: task-1787230831000-7 -->
 Not a numbered task in the original breakdown, but a real prerequisite: Gitea repo (auto_init:false, clean signed initial commit), Jenkins multibranch job, per-service Kaniko build stages (backend + frontend, separate images — not separate Jenkins jobs), GitHub mirror via a dedicated SSH deploy key (Jenkins credential, "Mirror to GitHub" stage before the Docker build so mirroring never depends on build success). `dev` branch active. Verified end-to-end 2026-08-20: build SUCCESS, both images in the registry, both branches mirrored with signatures intact.
 Tags: `infra` `ci-cd`
+
+#### Task 2 — Schema PostgreSQL + model SQLAlchemy
+<!-- id: task-1787230831000-0 -->
+Tabela `exchanges` (prompt, response, created_at) live în `docker-compose.yml`, `DatabaseClient` cu client global (nu recreat per-request) + volum persistent, confirmat cu restart real al containerului.
+Tags: `backend` `db`
+
+#### Task 3 — Endpoint FastAPI POST /chat
+<!-- id: task-1787230831000-1 -->
+Delegare reală către `claude -p` (subprocess async, `/root/.claude` persistent via `CLAUDE_CODE_OAUTH_TOKEN`, workspace minimal `/workspace`), context de conversație din ultimele 30 schimburi, persistat în `exchanges`. Trei bug-uri reale găsite și reparate, verificate live: SQL cu paranteze în jurul coloanelor (întorcea un tip compus, nu coloane separate — crash confirmat din traceback la al doilea request), `created_at` prins după apelul LLM în loc de înainte (ordinea de evaluare a argumentelor kwargs în Python), și ordinea greșită a istoricului în context (ASC+reversed combinate greșit, apoi corectat la DESC+reversed) — confirmat corect cu un test live care cerea LLM-ului să repete istoricul.
+Tags: `backend` `api`
