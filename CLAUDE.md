@@ -4,13 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status (updated 2026-08-26)
 
-Tasks 1-5 done: Postgres (global `DatabaseClient`, `lifespan`-managed), `POST /chat` delegating to `claude -p` with real conversation history, and a working chat UI (`react-markdown`+`remark-gfm` rendering, verified via headless browser). Task 6 (Docker Compose end-to-end wiring) is next — see "Known gap" below, there's a real architectural decision to make before starting it, not just wiring. See `KANBAN.md` for a live per-task view (Backlog/In Progress/Done); full task detail (Goal/Visible output/Done when for each task) lives in a private vault note outside this repo — ask if you need that context, don't assume it's summarized correctly here.
+v1 complete: Postgres (global `DatabaseClient`, `lifespan`-managed), `POST /chat` delegating to `claude -p` with real conversation history, a working chat UI (`react-markdown`+`remark-gfm` rendering), full Docker Compose wiring (CORS-based, see "CORS" below), a from-scratch README, and conversation history CRUD (`GET /history`, `DELETE /history/{id}`, `DELETE /history`, both backend + frontend). Next up: Task 8, unit tests (backend pytest + frontend Vitest/RTL) so an agent doesn't need Playwright/a real browser to verify a change — see `KANBAN.kanban.md`. Full task detail (Goal/Visible output/Done when for each task) lives in a private vault note outside this repo — ask if you need that context, don't assume it's summarized correctly here.
 
-### Known gap for Task 6 — CORS / proxy (decide before starting)
+### CORS (Task 6 resolution)
 
-The dev-only Vite proxy (`vite.config.ts`, `/chat` → `:8000`) only exists for `pnpm dev`. The Docker frontend is a static build (`serve -s dist`) with no equivalent — a browser hitting `:3000` in the containerized stack gets blocked by the backend's missing CORS headers if it tries `:8000` directly, and `/chat` on `:3000` itself just falls through to the SPA's `index.html` (no proxy layer there at all). Two real options, not yet decided:
-- Add `CORSMiddleware` to the FastAPI backend — simplest, but couples frontend/backend origins together unless configured carefully.
-- Put a reverse proxy in front of both services so the browser only ever talks to one origin — more setup, but closer to how this would actually get deployed publicly later.
+The dev-only Vite proxy (`vite.config.ts`, `/chat`/`/history` → `:8000`) only exists for `pnpm dev`. The Docker frontend is a static build (`serve -s dist`) with no equivalent, so the backend has `CORSMiddleware` scoped to `FRONTEND_ORIGIN` (env-configurable, defaults to `http://localhost:3000`) instead — chosen over a reverse proxy since public deploy is still out of scope; revisit if that changes. The frontend's own Dockerfile bakes `VITE_API_BASE_URL` in at build time for the same reason (no dev-proxy equivalent in the static build).
 
 Working branch is `dev` (manual commits, day-to-day work); `main` tracks stable/"production" state, updated only via an explicit merge. Both mirror to GitHub automatically on every push — nothing in this repo needs to stay private, unlike the sibling `blog` project.
 

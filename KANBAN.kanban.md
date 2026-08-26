@@ -6,21 +6,31 @@
 
 ## Backlog
 
-#### Task 6 — End-to-end wiring via Docker Compose
-<!-- id: task-1787230831000-4 -->
-Full flow (frontend -> backend -> LLM -> Postgres -> frontend) from a clean clone, `docker compose up` only. Known blocker, decide before starting: no CORS middleware on the backend, and the Docker frontend (static `serve -s dist`, no dev proxy) 404s/falls through to SPA on `/chat` — fork between adding CORS vs. a reverse proxy in front of both services, see CLAUDE.md.
-Tags: `infra`
-
-#### Task 7 — README
-<!-- id: task-1787230831000-5 -->
-Document local run instructions.
-Tags: `docs`
+#### Task 8 — Unit tests (backend + frontend)
+<!-- id: task-1787230831000-8 -->
+So an agent can verify a change without spinning up Playwright/a full browser every time. Backend: pytest against the FastAPI endpoints (`/chat`, `/history`, `/history/{id}`) with a real or test-scoped Postgres, covering the two bugs already found live (composite-column SQL, `created_at` kwarg-order). Frontend: Vitest + React Testing Library for `App.tsx`/`ChatHistory.tsx`/`ChatInput.tsx` — send/render, per-exchange delete, clear-all confirm gate — with `fetch` mocked, not a real backend. Not yet scoped in detail.
+Tags: `backend` `frontend` `testing`
 
 ## In Progress
 
 ## Paused
 
 ## Done
+
+#### Task 6 — End-to-end wiring via Docker Compose
+<!-- id: task-1787230831000-4 -->
+Resolved the CORS-vs-proxy fork with `CORSMiddleware`, scoped to `FRONTEND_ORIGIN` (env-configurable) — smaller than a reverse proxy given public deploy is still out of scope. Frontend `Dockerfile` now bakes `VITE_API_BASE_URL` at build time (no dev-proxy equivalent for the static `serve -s dist` build). Full flow (frontend -> backend -> LLM -> Postgres -> frontend) confirmed working from a clean `docker compose up`.
+Tags: `infra`
+
+#### Task 7 — README
+<!-- id: task-1787230831000-5 -->
+Rewritten for a from-scratch setup: prerequisites, `.env` walkthrough, `docker compose up`, and an endpoint table. Someone who's never seen the repo can start it from the README alone.
+Tags: `docs`
+
+#### Conversation history CRUD
+<!-- id: task-1787230831000-9 -->
+Pulled forward from the deferred non-goals list (2026-08-26). `GET /history`, `DELETE /history/{id}`, `DELETE /history` + `DatabaseClient` methods; frontend loads history on mount, per-exchange delete, clear-all behind a confirmation step. Verified both by the implementing session and manually by Tiberiu in a live browser.
+Tags: `backend` `frontend`
 
 #### Task 1 — Scaffold repo + Docker Compose
 <!-- id: task-1787230831000-6 -->
