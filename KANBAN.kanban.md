@@ -6,16 +6,16 @@
 
 ## Backlog
 
-#### Task 8 — Unit tests (backend + frontend)
-<!-- id: task-1787230831000-8 -->
-So an agent can verify a change without spinning up Playwright/a full browser every time. Backend: pytest against the FastAPI endpoints (`/chat`, `/history`, `/history/{id}`) with a real or test-scoped Postgres, covering the two bugs already found live (composite-column SQL, `created_at` kwarg-order). Frontend: Vitest + React Testing Library for `App.tsx`/`ChatHistory.tsx`/`ChatInput.tsx` — send/render, per-exchange delete, clear-all confirm gate — with `fetch` mocked, not a real backend. Not yet scoped in detail.
-Tags: `backend` `frontend` `testing`
-
 ## In Progress
 
 ## Paused
 
 ## Done
+
+#### Task 8 — Unit tests (backend + frontend)
+<!-- id: task-1787230831000-8 -->
+Backend: pytest against the real FastAPI app + a disposable Postgres (`docker-compose.test.yml`, deliberately not SQLite — the raw-SQL dialect fidelity matters, see Gotchas). `DatabaseClient` gained a `DATABASE_HOST` env var (default `database`, unchanged for dev/prod) so tests can point it at localhost. `call_llm` mocked via `monkeypatch`, never shells out for real. Regression tests written to actually catch the two known bugs (composite-column SELECT, `created_at` captured after the LLM call) — verified live by reintroducing each bug and confirming the test fails, then reverting. Also found and fixed a real test-fixture deadlock along the way: `DatabaseClient`'s read methods never commit/close their implicit transaction, so a prior test's SELECT can leave the connection idle-in-transaction holding a lock that blocks the next test's `TRUNCATE` — only surfaced against real Postgres. Frontend: Vitest + RTL, global `fetch` mocked, App-level integration tests (send/render, per-exchange delete, clear-all cancel/confirm) plus a `ChatInput` keyboard/disabled-state unit test. Wired into `Jenkinsfile` as `Test: backend`/`Test: frontend` stages (Postgres + node sidecars in the same Kubernetes pod as `kaniko`) before the build stages — not yet verified against a real Jenkins run.
+Tags: `backend` `frontend` `testing`
 
 #### Task 6 — End-to-end wiring via Docker Compose
 <!-- id: task-1787230831000-4 -->

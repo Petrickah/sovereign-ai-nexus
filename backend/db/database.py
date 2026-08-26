@@ -8,10 +8,11 @@ from core.models import ChatResponse
 
 class DatabaseClient:
     def __init__(self) -> None:
-        self._url = make_url("postgresql://{user}:{password}@database:{dbport}/{dbname}".format(
+        self._url = make_url("postgresql://{user}:{password}@{dbhost}:{dbport}/{dbname}".format(
             user    =os.environ["DATABASE_USER"],
             password=os.environ["DATABASE_PASSWORD"],
             dbname  =os.environ["DATABASE_NAME"],
+            dbhost  =os.environ.get("DATABASE_HOST", "database"),
             dbport  =os.environ["DATABASE_PORT"]
         ))
         self._engine = create_engine(self._url)
