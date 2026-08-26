@@ -6,6 +6,11 @@
 
 ## Backlog
 
+#### Task 9 — Deployment stage (K3s) + articol 5
+<!-- id: task-1787230831000-10 -->
+Ridicat 2026-08-26, la promovarea episodului 4: Jenkins-ul construiește și împinge imagini în registry, dar nu face niciun deployment real încă — arhitectura era deja decisă în nota din vault („Metodologia de lucru" → „Deployment": namespace-uri `dev`/`main` pe k3s), doar nescrisă în `Jenkinsfile`. Un pas `kubectl apply` nou, după `Build & Push`. Neînceput, nescopat în detaliu — de descompus abia când chiar începe.
+Tags: `infra` `k8s`
+
 ## In Progress
 
 ## Paused
