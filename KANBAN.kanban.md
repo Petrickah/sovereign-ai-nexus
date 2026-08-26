@@ -6,11 +6,6 @@
 
 ## Backlog
 
-#### Task 3 — Endpoint FastAPI POST /chat
-<!-- id: task-1787230831000-1 -->
-Delegates to `claude -p` (subprocess) or OpenRouter, env-switchable. Decide async subprocess handling + CLI auth-in-container before starting (flagged by council review) — see CLAUDE.md.
-Tags: `backend` `api`
-
 #### Task 4 — UI React/TS, chat input
 <!-- id: task-1787230831000-2 -->
 Input + submit, calls /chat, shows raw response first.
@@ -49,5 +44,10 @@ Tags: `infra` `ci-cd`
 
 #### Task 2 — Schema PostgreSQL + model SQLAlchemy
 <!-- id: task-1787230831000-0 -->
-Tabela `exchanges` (prompt, response, created_at). Deliberately split from Task 1's original scope — Postgres isn't in docker-compose.yml yet.
+Tabela `exchanges` (prompt, response, created_at) live în `docker-compose.yml`, `DatabaseClient` cu client global (nu recreat per-request) + volum persistent, confirmat cu restart real al containerului.
 Tags: `backend` `db`
+
+#### Task 3 — Endpoint FastAPI POST /chat
+<!-- id: task-1787230831000-1 -->
+Delegare reală către `claude -p` (subprocess async, `/root/.claude` persistent via `CLAUDE_CODE_OAUTH_TOKEN`, workspace minimal `/workspace`), context de conversație din ultimele 30 schimburi, persistat în `exchanges`. Trei bug-uri reale găsite și reparate, verificate live: SQL cu paranteze în jurul coloanelor (întorcea un tip compus, nu coloane separate — crash confirmat din traceback la al doilea request), `created_at` prins după apelul LLM în loc de înainte (ordinea de evaluare a argumentelor kwargs în Python), și ordinea greșită a istoricului în context (ASC+reversed combinate greșit, apoi corectat la DESC+reversed) — confirmat corect cu un test live care cerea LLM-ului să repete istoricul.
+Tags: `backend` `api`
