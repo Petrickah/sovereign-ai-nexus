@@ -7,11 +7,13 @@ services:
       - DATABASE_PASSWORD=${DATABASE_PASSWORD}
       - DATABASE_NAME=${DATABASE_NAME}
       - DATABASE_PORT=${DATABASE_PORT}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
     ports:
       - "8000:8000"
     volumes:
       - ./backend/core:/code/core
       - ./backend/db:/code/db
+      - claude_home:/root/.claude
     depends_on:
       database:
         condition: service_healthy
@@ -47,3 +49,4 @@ services:
 
 volumes:
   pgdata:
+  claude_home:
