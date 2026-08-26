@@ -2,9 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status (updated 2026-08-20)
+## Status (updated 2026-08-26)
 
-Early scaffold stage. Backend (FastAPI/uvicorn via `uv`) and frontend (React/Vite/TS) both build, run, and have working hot-reload/dev loops — confirmed live, not just theoretical. No database, no `/chat` endpoint, no real chat UI yet. See `KANBAN.md` for a live per-task view (Backlog/In Progress/Done); full task detail (Goal/Visible output/Done when for each task) lives in a private vault note outside this repo — ask if you need that context, don't assume it's summarized correctly here.
+Tasks 1-5 done: Postgres (global `DatabaseClient`, `lifespan`-managed), `POST /chat` delegating to `claude -p` with real conversation history, and a working chat UI (`react-markdown`+`remark-gfm` rendering, verified via headless browser). Task 6 (Docker Compose end-to-end wiring) is next — see "Known gap" below, there's a real architectural decision to make before starting it, not just wiring. See `KANBAN.md` for a live per-task view (Backlog/In Progress/Done); full task detail (Goal/Visible output/Done when for each task) lives in a private vault note outside this repo — ask if you need that context, don't assume it's summarized correctly here.
+
+### Known gap for Task 6 — CORS / proxy (decide before starting)
+
+The dev-only Vite proxy (`vite.config.ts`, `/chat` → `:8000`) only exists for `pnpm dev`. The Docker frontend is a static build (`serve -s dist`) with no equivalent — a browser hitting `:3000` in the containerized stack gets blocked by the backend's missing CORS headers if it tries `:8000` directly, and `/chat` on `:3000` itself just falls through to the SPA's `index.html` (no proxy layer there at all). Two real options, not yet decided:
+- Add `CORSMiddleware` to the FastAPI backend — simplest, but couples frontend/backend origins together unless configured carefully.
+- Put a reverse proxy in front of both services so the browser only ever talks to one origin — more setup, but closer to how this would actually get deployed publicly later.
 
 Working branch is `dev` (manual commits, day-to-day work); `main` tracks stable/"production" state, updated only via an explicit merge. Both mirror to GitHub automatically on every push — nothing in this repo needs to stay private, unlike the sibling `blog` project.
 
@@ -26,6 +32,7 @@ Python (FastAPI) + PostgreSQL backend (Postgres not wired up yet — deliberatel
 - **Docker Compose volume mounts must target where the app actually imports from, not a generic convention path.** The backend mount is `./backend/core:/code/core` — matches `WORKDIR /code` + `uvicorn core.main:app`. An earlier version mounted to `/code/app` (copied from a generic FastAPI tutorial) — silently broke hot-reload, since nothing ever read that path.
 - **Don't add a volume mount to the frontend service.** It runs a built static bundle (`serve -s dist`), not a dev server — mounting host source over `/app` clobbers the built `dist/` and `node_modules` baked into the image, causing 404s. For frontend dev iteration, run `pnpm dev` on the host instead.
 - **pnpm global installs don't work in this Docker image** (`pnpm add -g <pkg>` fails — pnpm's global bin dir isn't in `PATH` inside the container, and there's no interactive shell for `pnpm setup` to fix it). Add packages as normal (non-global) dependencies and invoke via `pnpm exec <pkg>`.
+- **GitHub's "Update branch" button on a PR creates a merge commit that Gitea never sees** — found 2026-08-26, PR #2. If you click it (or GitHub does it automatically) before merging, `dev` on GitHub gets a "Merge branch 'main' into dev" commit that doesn't exist on Gitea's `dev`. The next push from Gitea's `dev` (via the Jenkins "Mirror to GitHub" stage) then fails non-fast-forward — confirmed from the actual build log (`error: failed to push some refs`). Fix: `git fetch github dev`, confirm the old Gitea tip is still an ancestor (`git merge-base --is-ancestor <old-tip> github/dev`) and the file content is actually identical (it was — the merge commit was a content no-op), then `git rebase github/dev` locally and `git push origin dev --force-with-lease`. Same class of fix as syncing `main` after a PR merge (see "CI/CD" below), just on `dev` instead, and needing a rebase instead of a fast-forward because the histories had genuinely diverged, not just advanced.
 
 ## CI/CD
 

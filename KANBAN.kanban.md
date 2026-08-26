@@ -6,19 +6,9 @@
 
 ## Backlog
 
-#### Task 4 — UI React/TS, chat input
-<!-- id: task-1787230831000-2 -->
-Input + submit, calls /chat, shows raw response first.
-Tags: `frontend`
-
-#### Task 5 — Render artifact (markdown)
-<!-- id: task-1787230831000-3 -->
-Format the response instead of raw JSON.
-Tags: `frontend`
-
 #### Task 6 — End-to-end wiring via Docker Compose
 <!-- id: task-1787230831000-4 -->
-Full flow (frontend -> backend -> LLM -> Postgres -> frontend) from a clean clone, `docker compose up` only.
+Full flow (frontend -> backend -> LLM -> Postgres -> frontend) from a clean clone, `docker compose up` only. Known blocker, decide before starting: no CORS middleware on the backend, and the Docker frontend (static `serve -s dist`, no dev proxy) 404s/falls through to SPA on `/chat` — fork between adding CORS vs. a reverse proxy in front of both services, see CLAUDE.md.
 Tags: `infra`
 
 #### Task 7 — README
@@ -51,3 +41,13 @@ Tags: `backend` `db`
 <!-- id: task-1787230831000-1 -->
 Delegare reală către `claude -p` (subprocess async, `/root/.claude` persistent via `CLAUDE_CODE_OAUTH_TOKEN`, workspace minimal `/workspace`), context de conversație din ultimele 30 schimburi, persistat în `exchanges`. Trei bug-uri reale găsite și reparate, verificate live: SQL cu paranteze în jurul coloanelor (întorcea un tip compus, nu coloane separate — crash confirmat din traceback la al doilea request), `created_at` prins după apelul LLM în loc de înainte (ordinea de evaluare a argumentelor kwargs în Python), și ordinea greșită a istoricului în context (ASC+reversed combinate greșit, apoi corectat la DESC+reversed) — confirmat corect cu un test live care cerea LLM-ului să repete istoricul.
 Tags: `backend` `api`
+
+#### Task 4 — UI React/TS, chat input
+<!-- id: task-1787230831000-2 -->
+ChatInput/ChatHistory, input controlat, Enter trimite, Shift+Enter linie nouă, disabled cât timp răspunsul e în așteptare. Implementat printr-o sesiune Claude Code separată, deschisă direct în repo — verificat cu browser headless real, tsc + eslint curate.
+Tags: `frontend`
+
+#### Task 5 — Render artifact (markdown)
+<!-- id: task-1787230831000-3 -->
+`react-markdown` + `remark-gfm` pentru răspunsurile assistant-ului (headings/liste/cod randate real, nu text brut); mesajele utilizatorului rămân text simplu. Dev proxy Vite (`/chat` → `:8000`) doar pentru `pnpm dev` local, fără efect pe build-ul Docker.
+Tags: `frontend`
