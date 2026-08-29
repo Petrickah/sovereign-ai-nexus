@@ -45,12 +45,6 @@ services:
       - pgdata:/var/lib/postgresql
       - ./backend/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
 
-  adminer:
-    image: adminer:6.0.1-standalone
-    restart: always
-    ports:
-      - 8080:8080
-
 volumes:
   pgdata:
   claude_home:
