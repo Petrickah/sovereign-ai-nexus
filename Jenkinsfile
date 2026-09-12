@@ -74,11 +74,16 @@ pipeline {
                 docker exec -i pg-test-${BUILD_NUMBER} psql -U test -d test < backend/db/init.sql
 
                 HOST_WS="/opt/homelab/jenkins/data${WORKSPACE#/var/jenkins_home}"
-                docker run --rm --network host -v "$HOST_WS/backend":/workspace -w /workspace \
-                  ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine sh -c "
+                # Root inside the container would leave .venv/__pycache__
+                # root-owned in the shared workspace (same class of bug as
+                # ci-pilot's native-build chown fix) -> chown back before exit.
+                docker run --rm --network host -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+                  -v "$HOST_WS/backend":/workspace -w /workspace \
+                  ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine sh -c '
+                    trap "chown -R $HOST_UID:$HOST_GID ." EXIT
                     uv sync --frozen
                     DATABASE_HOST=localhost DATABASE_PORT=5433 DATABASE_USER=test DATABASE_PASSWORD=test DATABASE_NAME=test uv run pytest -v
-                  "
+                  '
                 '''
             }
             post {
@@ -91,11 +96,13 @@ pipeline {
             steps {
                 sh '''
                 HOST_WS="/opt/homelab/jenkins/data${WORKSPACE#/var/jenkins_home}"
-                docker run --rm -v "$HOST_WS/frontend":/workspace -w /workspace node:22-alpine sh -c "
+                docker run --rm -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+                  -v "$HOST_WS/frontend":/workspace -w /workspace node:22-alpine sh -c '
+                  trap "chown -R $HOST_UID:$HOST_GID ." EXIT
                   corepack enable
                   pnpm install --frozen-lockfile
                   pnpm test
-                "
+                '
                 '''
             }
         }
