@@ -3,6 +3,12 @@
 // pipeline -> registry push -> Gitea commit-status notification), 2026-08-17.
 // See templates/PROJECT_CI_SETUP.md for how to wire the Jenkins job itself.
 //
+// Docker-CI migration (Homelab Redux Valul 1, 2026-09-12): Kaniko/K8s agent
+// retired along with the K3s cluster. Jenkins now runs as a Docker container
+// on the same host as the registry, with /var/run/docker.sock mounted, so
+// image builds go through the host's own Docker daemon directly instead of
+// an in-pod Kaniko executor.
+//
 // "Mirror to GitHub" (added 2026-08-20, sovereign-ai-nexus): Gitea's native Push
 // Mirror only supports http(s)/git:// remotes (confirmed from Gitea source,
 // modules/git/remote.go — ssh:// is rejected with "Invalid mirror protocol"),
@@ -15,55 +21,25 @@
 // only — reuse this pattern for future projects that want the same mirror setup.
 
 // "Build & Push: <service>" (added 2026-08-20): one Jenkinsfile, one stage per
-// service, each with its own Kaniko context/Dockerfile/image tag — not a
+// service, each with its own Docker build context/Dockerfile/image tag — not a
 // separate Jenkins job per service. Same practical isolation (backend build
 // failing doesn't touch the frontend build result) without re-paying the
 // per-job setup cost (branch discovery trait, webhook registration) for a
 // single-repo, two-service project. Reuse this shape (one stage per
 // `<service>/Dockerfile`) if a third service is added later.
 
-// "Test: backend"/"Test: frontend" (added 2026-08-26, Task 8): run before the
-// Kaniko build stages so a broken test fails the pipeline instead of just a
-// local run. Both add a sidecar container to the same pod via `yaml:` merged
-// with `inheritFrom 'kaniko'` — a plain extra container in the pod, not
-// Docker-in-Docker, since Kaniko's whole premise is building without a
-// docker daemon and testcontainers-style "spin up a container from inside
-// the build" would need one. The backend test Postgres is genuinely
-// disposable (no volume) and distinct from `docker-compose.test.yml`, which
-// exists for the same purpose locally — same env-var contract
-// (DATABASE_HOST=localhost etc.), different orchestration mechanism, so the
-// test code itself doesn't care which one it's talking to.
+// "Test: backend"/"Test: frontend" (updated 2026-09-12): now reuses the repo's
+// own `docker-compose.test.yml` (previously a docker-only local convenience,
+// distinct from the Kaniko sidecar) as the actual CI test database — one fewer
+// thing to keep in sync. Python/Node test steps run via the Docker Pipeline
+// plugin's `.inside('--network host')` so they can reach the compose-published
+// `localhost:5433` Postgres directly, same env-var contract as before
+// (DATABASE_HOST=localhost etc.) — the test code itself doesn't know the
+// difference.
 pipeline {
-    agent {
-        kubernetes {
-            inheritFrom 'kaniko'
-            yaml '''
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-    - name: postgres-test
-      image: postgres:18.6-trixie
-      env:
-        - name: POSTGRES_USER
-          value: test
-        - name: POSTGRES_PASSWORD
-          value: test
-        - name: POSTGRES_DB
-          value: test
-    - name: python
-      image: ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine
-      command: ['cat']
-      tty: true
-    - name: node
-      image: node:22-alpine
-      command: ['cat']
-      tty: true
-'''
-        }
-    }
+    agent any
     environment {
-        REGISTRY   = '192.168.1.20:5000'
+        REGISTRY   = '192.168.1.21:5000'
         GITHUB_MIRROR_URL = 'git@github.com:Petrickah/sovereign-ai-nexus.git'
     }
     stages {
@@ -84,58 +60,59 @@ spec:
         }
         stage('Test: backend') {
             steps {
-                container('python') {
-                    dir('backend') {
-                        sh '''
-                        apk add --no-cache postgresql-client >/dev/null
-                        until pg_isready -h localhost -p 5432 -U test; do sleep 1; done
-                        # The postgres-test sidecar has no docker-entrypoint-initdb.d mount
-                        # (that's a docker-compose-only mechanism), so apply the schema by hand.
-                        PGPASSWORD=test psql -h localhost -U test -d test -f db/init.sql
-                        uv sync --frozen
-                        DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_USER=test DATABASE_PASSWORD=test DATABASE_NAME=test \
-                          uv run pytest -v
-                        '''
+                sh 'docker compose -f docker-compose.test.yml up -d --wait'
+                dir('backend') {
+                    script {
+                        docker.image('ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine').inside('--network host') {
+                            sh '''
+                            uv sync --frozen
+                            DATABASE_HOST=localhost DATABASE_PORT=5433 DATABASE_USER=test DATABASE_PASSWORD=test DATABASE_NAME=test \
+                              uv run pytest -v
+                            '''
+                        }
                     }
+                }
+            }
+            post {
+                always {
+                    sh 'docker compose -f docker-compose.test.yml down -v'
                 }
             }
         }
         stage('Test: frontend') {
             steps {
-                container('node') {
-                    dir('frontend') {
-                        sh '''
-                        corepack enable
-                        pnpm install --frozen-lockfile
-                        pnpm test
-                        '''
+                dir('frontend') {
+                    script {
+                        docker.image('node:22-alpine').inside {
+                            sh '''
+                            corepack enable
+                            pnpm install --frozen-lockfile
+                            pnpm test
+                            '''
+                        }
                     }
                 }
             }
         }
         stage('Build & Push: backend') {
             steps {
-                container('kaniko') {
-                    sh '''
-                    /kaniko/executor                                            \
-                      --context="$(pwd)/backend"                               \
-                      --dockerfile=Dockerfile                                  \
-                      --destination=${REGISTRY}/sovereign-ai-nexus-backend:${BRANCH_NAME}-${BUILD_NUMBER} \
-                      --insecure --skip-tls-verify
-                    '''
+                script {
+                    def tag = "${REGISTRY}/sovereign-ai-nexus-backend:${BRANCH_NAME}-${BUILD_NUMBER}"
+                    sh """
+                    docker build -t ${tag} backend
+                    docker push ${tag}
+                    """
                 }
             }
         }
         stage('Build & Push: frontend') {
             steps {
-                container('kaniko') {
-                    sh '''
-                    /kaniko/executor                                            \
-                      --context="$(pwd)/frontend"                              \
-                      --dockerfile=Dockerfile                                  \
-                      --destination=${REGISTRY}/sovereign-ai-nexus-frontend:${BRANCH_NAME}-${BUILD_NUMBER} \
-                      --insecure --skip-tls-verify
-                    '''
+                script {
+                    def tag = "${REGISTRY}/sovereign-ai-nexus-frontend:${BRANCH_NAME}-${BUILD_NUMBER}"
+                    sh """
+                    docker build -t ${tag} frontend
+                    docker push ${tag}
+                    """
                 }
             }
         }
