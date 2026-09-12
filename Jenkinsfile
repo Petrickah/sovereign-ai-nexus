@@ -28,14 +28,20 @@
 // single-repo, two-service project. Reuse this shape (one stage per
 // `<service>/Dockerfile`) if a third service is added later.
 
-// "Test: backend"/"Test: frontend" (updated 2026-09-12): now reuses the repo's
-// own `docker-compose.test.yml` (previously a docker-only local convenience,
-// distinct from the Kaniko sidecar) as the actual CI test database — one fewer
-// thing to keep in sync. Python/Node test steps run via the Docker Pipeline
-// plugin's `.inside('--network host')` so they can reach the compose-published
-// `localhost:5433` Postgres directly, same env-var contract as before
-// (DATABASE_HOST=localhost etc.) — the test code itself doesn't know the
-// difference.
+// "Test: backend"/"Test: frontend" (updated 2026-09-12, revised same day):
+// first attempt reused the repo's own `docker-compose.test.yml`, but that
+// broke too — Jenkins itself runs as a container with the host's
+// docker.sock passed through (Docker-outside-of-Docker), so a *relative*
+// bind-mount path in that compose file resolves against Jenkins' own
+// filesystem view (/var/jenkins_home/...), which the host daemon can't see.
+// Reverted to a plain disposable `docker run` Postgres (closer to the
+// original Kaniko-sidecar shape) — schema applied via `docker exec -i psql`
+// (stdin, no bind mount involved, so no path-translation problem). No
+// "Docker Pipeline" plugin installed, so no `docker.image().inside()`
+// either — plain `docker run`/`docker exec`, same as everywhere else.
+// Absolute host paths for the Python/Node containers are constructed via
+// $WORKSPACE -> /opt/homelab/jenkins/data translation (see ci-pilot's
+// Jenkinsfile comment for the fuller explanation).
 pipeline {
     agent { label 'built-in' }
     environment {
@@ -60,38 +66,37 @@ pipeline {
         }
         stage('Test: backend') {
             steps {
-                sh 'docker compose -f docker-compose.test.yml up -d --wait'
-                dir('backend') {
-                    script {
-                        docker.image('ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine').inside('--network host') {
-                            sh '''
-                            uv sync --frozen
-                            DATABASE_HOST=localhost DATABASE_PORT=5433 DATABASE_USER=test DATABASE_PASSWORD=test DATABASE_NAME=test \
-                              uv run pytest -v
-                            '''
-                        }
-                    }
-                }
+                sh '''
+                docker run -d --name pg-test-${BUILD_NUMBER} \
+                  -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=test \
+                  -p 127.0.0.1:5433:5432 postgres:18.6-trixie
+                until docker exec pg-test-${BUILD_NUMBER} pg_isready -U test -d test >/dev/null 2>&1; do sleep 1; done
+                docker exec -i pg-test-${BUILD_NUMBER} psql -U test -d test < backend/db/init.sql
+
+                HOST_WS="/opt/homelab/jenkins/data${WORKSPACE#/var/jenkins_home}"
+                docker run --rm --network host -v "$HOST_WS/backend":/workspace -w /workspace \
+                  ghcr.io/astral-sh/uv:0.12.5-python3.14-alpine sh -c "
+                    uv sync --frozen
+                    DATABASE_HOST=localhost DATABASE_PORT=5433 DATABASE_USER=test DATABASE_PASSWORD=test DATABASE_NAME=test uv run pytest -v
+                  "
+                '''
             }
             post {
                 always {
-                    sh 'docker compose -f docker-compose.test.yml down -v'
+                    sh 'docker rm -f pg-test-${BUILD_NUMBER} || true'
                 }
             }
         }
         stage('Test: frontend') {
             steps {
-                dir('frontend') {
-                    script {
-                        docker.image('node:22-alpine').inside {
-                            sh '''
-                            corepack enable
-                            pnpm install --frozen-lockfile
-                            pnpm test
-                            '''
-                        }
-                    }
-                }
+                sh '''
+                HOST_WS="/opt/homelab/jenkins/data${WORKSPACE#/var/jenkins_home}"
+                docker run --rm -v "$HOST_WS/frontend":/workspace -w /workspace node:22-alpine sh -c "
+                  corepack enable
+                  pnpm install --frozen-lockfile
+                  pnpm test
+                "
+                '''
             }
         }
         stage('Build & Push: backend') {
