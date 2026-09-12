@@ -37,7 +37,7 @@
 // (DATABASE_HOST=localhost etc.) — the test code itself doesn't know the
 // difference.
 pipeline {
-    agent any
+    agent { label 'built-in' }
     environment {
         REGISTRY   = '192.168.1.21:5000'
         GITHUB_MIRROR_URL = 'git@github.com:Petrickah/sovereign-ai-nexus.git'
